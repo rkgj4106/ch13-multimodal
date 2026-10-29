@@ -1,0 +1,6 @@
+Kubernetes 실습 참고 자료
+
+Pod 로그는 kubectl logs <pod-name> 명령으로 확인합니다.
+직전 종료된 컨테이너 로그는 kubectl logs <pod-name> --previous 명령으로 확인합니다.
+Pod 상태와 이벤트는 kubectl describe pod <pod-name> 명령으로 확인합니다.
+CrashLoopBackOff는 컨테이너가 반복 종료되어 재시작 간격을 늘리고 있는 상태입니다. 로그와 이벤트를 확인한 뒤 원인을 수정합니다.

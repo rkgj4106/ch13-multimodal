@@ -1,0 +1,111 @@
+# YOUR_DOCKERHUB_ID를 실제 계정으로 바꾸세요.
+# 단일 GPU를 Ollama가 독점 요청 중이면 GPU 공유 설정 또는 GPU 자원 확보가 필요합니다.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: text-to-image-data
+  namespace: default
+spec:
+  accessModes: [ReadWriteOnce]
+  # 기본 StorageClass가 없으면 실제 클래스 이름을 지정하세요.
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: text-to-image
+  namespace: default
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: text-to-image
+  template:
+    metadata:
+      labels:
+        app: text-to-image
+    spec:
+      # 기존 Ollama가 RuntimeClass를 사용한다면 필요에 따라 지정하세요.
+      # runtimeClassName: nvidia
+      terminationGracePeriodSeconds: 300
+      containers:
+        - name: text-to-image
+          image: yklee2002/text-to-image
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: IMAGE_MODEL
+              value: "stabilityai/stable-diffusion-xl-base-1.0"
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama.default.svc.cluster.local:11434"
+            - name: CHAT_MODEL
+              value: "gemma3:12b"
+            - name: TRANSLATE_DEFAULT
+              value: "true"
+            - name: CPU_OFFLOAD
+              value: "false"
+            - name: DATA_DIR
+              value: "/data"
+            - name: HF_HOME
+              value: "/models"
+            - name: TOKENIZERS_PARALLELISM
+              value: "false"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "8"
+              memory: "2Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: storage
+              mountPath: /data
+              subPath: outputs
+            - name: storage
+              mountPath: /models
+              subPath: models
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: text-to-image-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: text-to-image
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: text-to-image
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      nodePort: 30801

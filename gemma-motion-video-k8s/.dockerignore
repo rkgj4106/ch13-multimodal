@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+data
+output
+*.mp4
+*.png
+*.log
+.env
+.git
+*.zip

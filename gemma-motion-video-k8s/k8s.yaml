@@ -1,0 +1,132 @@
+# Existing infrastructure: node sict, namespace default, Ollama requests ONE GPU.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gemma-motion-pv
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: default
+    name: gemma-motion-data
+  hostPath:
+    path: /var/lib/gemma-motion-video
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchFields:
+            - key: metadata.name
+              operator: In
+              values:
+                - sict
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gemma-motion-data
+  namespace: default
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ""
+  volumeName: gemma-motion-pv
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gemma-motion-video
+  namespace: default
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gemma-motion-video
+  template:
+    metadata:
+      labels:
+        app: gemma-motion-video
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: gemma-motion-video
+          image: yklee2002/gemma-motion-video-k8s
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama.default.svc.cluster.local:11434"
+            - name: LLM_MODEL
+              value: "gemma3:12b"
+            - name: VIDEO_MODEL
+              value: "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+            - name: DATA_DIR
+              value: "/data/jobs"
+            - name: HF_HOME
+              value: "/data/huggingface"
+            - name: HF_HUB_DISABLE_XET
+              value: "1"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+            limits:
+              cpu: "8"
+              memory: "48Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gemma-motion-data
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gemma-motion-video
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: gemma-motion-video
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

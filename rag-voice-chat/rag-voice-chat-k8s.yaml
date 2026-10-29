@@ -1,0 +1,100 @@
+# 기존 Ollama Service가 default namespace에 있다고 가정합니다.
+# YOUR_DOCKERHUB_ID를 실제 Docker Hub 계정으로 바꾸세요.
+# kubectl apply -f rag-voice-chat-k8s.yaml
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rag-voice-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # 기본 StorageClass가 없으면 실제 이름을 지정하세요.
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-voice-chat
+  namespace: default
+spec:
+  replicas: 1
+  # SQLite를 사용하는 단일 Pod를 교체한 뒤 새 Pod를 실행합니다.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: rag-voice-chat
+  template:
+    metadata:
+      labels:
+        app: rag-voice-chat
+    spec:
+      containers:
+        - name: rag-voice-chat
+          image: yklee2002/rag-voice-chat
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama.default.svc.cluster.local:11434"
+            - name: CHAT_MODEL
+              value: "gemma3:12b"
+            - name: EMBED_MODEL
+              value: "bge-m3"
+            - name: DATA_DIR
+              value: "/data"
+            - name: MIN_SCORE
+              value: "0.35"
+          volumeMounts:
+            - name: rag-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: rag-data
+          persistentVolumeClaim:
+            claimName: rag-voice-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-voice-chat
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: rag-voice-chat
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      nodePort: 30800
