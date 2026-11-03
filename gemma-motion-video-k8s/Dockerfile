@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     LLM_MODEL=gemma3:12b VIDEO_MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers \
     TOKENIZERS_PARALLELISM=false
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates \
-    && rm -rf /var/lib/apt/lists/*  
+    && rm -rf /var/lib/apt/lists/*   
 WORKDIR /app
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
