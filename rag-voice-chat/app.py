@@ -18,7 +18,7 @@ from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / '.env')
-OLLAMA_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434').rstrip('/')
+OLLAMA_URL = os.getenv('OLLAMA_BASE_URL', 'http://host.docker.internal:11435').rstrip('/')
 CHAT_MODEL = os.getenv('CHAT_MODEL', 'gemma3:12b')
 EMBED_MODEL = os.getenv('EMBED_MODEL', 'bge-m3')
 DATA_DIR = Path(os.getenv('DATA_DIR', str(ROOT / 'data')))
